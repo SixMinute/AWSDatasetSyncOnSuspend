@@ -72,6 +72,13 @@ public class Main : MonoBehaviour
 		} );
 	}
 	
+    public void OnGUI()
+    {
+        if (GUI.Button(new Rect(15, 15, 300, 100), "Sync synchronize"))
+        {
+            SynchronizeAndWait();
+        }
+    }
 	
 	public void OnApplicationPause(bool isSuspended)
 	{
@@ -79,35 +86,43 @@ public class Main : MonoBehaviour
 		{
 			return;
 		}
-
-		if(!isSuspended)
+        if (!isSuspended)
 		{
-			ManualResetEvent waitLock = new ManualResetEvent(false);
-			
-			EventHandler<SyncSuccessEvent> afterSync = null;
-			EventHandler<SyncFailureEvent> afterFail = null;
-			
-			Action unsubscribe = () => {
-				Debug.Log("Returned");
-				waitLock.Set();
-				dataset.OnSyncSuccess -= afterSync;
-				dataset.OnSyncFailure -= afterFail;
-			};
-			
-			afterSync = (object sender, SyncSuccessEvent e) => {
-				unsubscribe.Invoke();
-			};
-			afterFail = (object sender, SyncFailureEvent e) => {
-				unsubscribe.Invoke();
-			};
-			
-			dataset.OnSyncSuccess += afterSync;
-			dataset.OnSyncFailure += afterFail;
-			Debug.Log("Synchronizing");
-			dataset.Synchronize();
-			
-			Debug.Log("Waiting");
-//			waitLock.WaitOne();
-		}
+            SynchronizeAndWait();
+        }
 	}
+
+    private void SynchronizeAndWait()
+    {
+        ManualResetEvent waitLock = new ManualResetEvent(false);
+
+        EventHandler<SyncSuccessEvent> afterSync = null;
+        EventHandler<SyncFailureEvent> afterFail = null;
+
+        Action unsubscribe = () => {
+            waitLock.Set();
+            dataset.OnSyncSuccess -= afterSync;
+            dataset.OnSyncFailure -= afterFail;
+        };
+
+        afterSync = (object sender, SyncSuccessEvent e) => {
+            unsubscribe.Invoke();
+        };
+        afterFail = (object sender, SyncFailureEvent e) => {
+            unsubscribe.Invoke();
+        };
+
+        dataset.OnSyncSuccess += afterSync;
+        dataset.OnSyncFailure += afterFail;
+
+        Debug.Log("Synchronizing");
+        new System.Threading.Thread(() => {
+            dataset.Synchronize();
+            Debug.Log("Waiting");
+            waitLock.WaitOne();
+            Debug.Log("Synchronized");
+        }).Start();
+
+    }
+
 }
